@@ -1,0 +1,49 @@
+function [E, grad] = energy_Eu_withDownUpdate(xf, Ku, x_fixed, idxFree, rowSizes, abc)
+    nCtrl = length(x_fixed)/3;%控制点数量
+    
+    % Assemble full vector
+    x = x_fixed;
+    x(idxFree) = xf;
+    
+    % 拆分 px, py, pz
+    px = x(1:nCtrl);
+    py = x(nCtrl+1:2*nCtrl);
+    pz = x(2*nCtrl+1:end);
+    
+    ctrlPts = [px, py, pz];  % nCtrl x 3
+    
+    % --- 更新 down 控制点 ---
+    rowStart = cumsum([1; rowSizes(1:end-1)]);
+    nMid = size(abc,1);
+    for k = 1:nMid
+        a = abc(k,1);
+        b = abc(k,2);
+        c = abc(k,3);
+        
+        idx_up   = rowStart(3*k-2) : rowStart(3*k-2)+rowSizes(3*k-2)-1;
+        idx_main = rowStart(3*k-1) : rowStart(3*k-1)+rowSizes(3*k-1)-1;
+        idx_down = rowStart(3*k)   : rowStart(3*k)  +rowSizes(3*k)-1;
+        
+        Wi_up   = ctrlPts(idx_up,:);
+        Wi_main = ctrlPts(idx_main,:);
+        
+        % 更新 down 控制点
+        ctrlPts(idx_down,:) = ((1-b)*Wi_main - a*Wi_up)/c;
+    end
+    
+    % Energy
+    px = ctrlPts(:,1);
+    py = ctrlPts(:,2);
+    pz = ctrlPts(:,3);
+    
+    E = px.'*Ku*px + py.'*Ku*py + pz.'*Ku*pz;
+    
+    % Gradient w.r.t full vector
+    gx = zeros(3*nCtrl,1);
+    gx(1:nCtrl)         = 2*Ku*px;
+    gx(nCtrl+1:2*nCtrl) = 2*Ku*py;
+    gx(2*nCtrl+1:end)   = 2*Ku*pz;
+    
+    % Extract gradient for free variables (Wij_up only)
+    grad = gx(idxFree);
+end
